@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — FaceAttend{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}{{ today.strftime('%A, %B %d, %Y') }} · Welcome, Admin 👋{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- STAT CARDS -->
+<div class="stats-grid">
+  <div class="stat-card stat-purple animate-fade delay-1">
+    <div class="glow-bg"></div>
+    <div class="icon-wrapper">👥</div>
+    <div class="stat-value" data-counter="{{ total_students }}">0</div>
+    <div class="stat-label">Total Students</div>
+    <div class="stat-change text-purple">📚 Registered</div>
+  </div>
+
+  <div class="stat-card stat-green animate-fade delay-2">
+    <div class="glow-bg"></div>
+    <div class="icon-wrapper">✅</div>
+    <div class="stat-value" data-counter="{{ today_present }}">0</div>
+    <div class="stat-label">Present Today</div>
+    <div class="stat-change text-success">Today's count</div>
+  </div>
+
+  <div class="stat-card stat-cyan animate-fade delay-3">
+    <div class="glow-bg"></div>
+    <div class="icon-wrapper">📊</div>
+    <div class="stat-value" data-counter="{{ today_percentage }}" data-suffix="%">0%</div>
+    <div class="stat-label">Attendance Rate</div>
+    <div class="stat-change text-cyan">Today's percentage</div>
+  </div>
+
+  <div class="stat-card stat-amber animate-fade delay-4">
+    <div class="glow-bg"></div>
+    <div class="icon-wrapper">❌</div>
+    <div class="stat-value" data-counter="{{ total_students - today_present }}">0</div>
+    <div class="stat-label">Absent Today</div>
+    <div class="stat-change text-amber">Not yet marked</div>
+  </div>
+</div>
+
+<!-- PROGRESS BAR -->
+<div class="card mb-24 animate-fade delay-2">
+  <div class="card-header">
+    <div>
+      <div class="card-title">Today's Attendance Progress</div>
+      <div class="card-subtitle">{{ today_present }} out of {{ total_students }} students present</div>
+    </div>
+    <div class="badge badge-{% if today_percentage >= 75 %}success{% elif today_percentage >= 50 %}cyan{% else %}danger{% endif %}">
+      {{ today_percentage }}%
+    </div>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" data-width="{{ today_percentage }}"></div>
+  </div>
+  <div class="flex justify-between mt-8 text-xs text-muted">
+    <span>0 students</span>
+    <span>{{ total_students }} students</span>
+  </div>
+</div>
+
+<!-- CHARTS ROW -->
+<div class="grid-2 mb-24">
+  <!-- Weekly Bar Chart -->
+  <div class="card animate-fade delay-2">
+    <div class="card-header">
+      <div>
+        <div class="card-title">📅 Weekly Attendance</div>
+        <div class="card-subtitle">Last 7 days</div>
+      </div>
+    </div>
+    <div class="chart-container" style="height:220px;">
+      <canvas id="weeklyChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Donut Chart -->
+  <div class="card animate-fade delay-3">
+    <div class="card-header">
+      <div>
+        <div class="card-title">🍩 Today's Split</div>
+        <div class="card-subtitle">Present vs Absent</div>
+      </div>
+    </div>
+    <div style="height:220px;display:flex;align-items:center;justify-content:center;">
+      <canvas id="donutChart" style="max-width:200px;max-height:200px;"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Monthly Trend -->
+<div class="card mb-24 animate-fade delay-3">
+  <div class="card-header">
+    <div>
+      <div class="card-title">📈 Monthly Attendance Trend</div>
+      <div class="card-subtitle">Last 30 days</div>
+    </div>
+  </div>
+  <div class="chart-container" style="height:200px;">
+    <canvas id="monthlyChart"></canvas>
+  </div>
+</div>
+
+<!-- BOTTOM ROW -->
+<div class="grid-2-1">
+  <!-- Recent Activity -->
+  <div class="card animate-fade delay-4">
+    <div class="card-header">
+      <div class="card-title">🕐 Recent Activity</div>
+      <a href="{{ url_for('admin.attendance') }}" class="btn btn-secondary btn-sm">View All</a>
+    </div>
+    {% if recent_records %}
+    {% for record, student in recent_records %}
+    <div class="activity-item">
+      <div class="activity-dot {% if record.exit_time %}exit{% else %}entry{% endif %}"></div>
+      <div>
+        <div class="activity-text">
+          <strong>{{ student.name }}</strong>
+          {% if record.exit_time %} exited {% else %} entered {% endif %}
+          · <span class="badge badge-{% if student.class_name %}purple{% else %}cyan{% endif %}">{{ student.class_name }}</span>
+        </div>
+        <div class="activity-time">
+          {% if record.exit_time %}
+            Exit: {{ record.exit_time.strftime('%I:%M %p') }}
+          {% elif record.entry_time %}
+            Entry: {{ record.entry_time.strftime('%I:%M %p') }}
+          {% endif %}
+          · {{ record.date.strftime('%b %d') }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="text-align:center;padding:40px;color:var(--text-muted);">
+      <div style="font-size:48px;">📭</div>
+      <p>No attendance records yet today.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Quick Actions -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card animate-fade delay-4">
+      <div class="card-title mb-16">⚡ Quick Actions</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <a href="{{ url_for('admin.students') }}" class="btn btn-primary">
+          ➕ Add New Student
+        </a>
+        <a href="{{ url_for('admin.attendance') }}" class="btn btn-secondary">
+          📋 View Attendance
+        </a>
+        <a href="{{ url_for('admin.attendance') }}?date={{ today }}" class="btn btn-secondary">
+          📅 Today's Report
+        </a>
+      </div>
+    </div>
+
+    <div class="card animate-fade delay-4">
+      <div class="card-title mb-16">📌 Alerts</div>
+      {% if no_face_count > 0 %}
+      <div style="padding:12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;font-size:13px;color:#fcd34d;">
+        ⚠️ <strong>{{ no_face_count }}</strong> students have no face photo registered.
+        <a href="{{ url_for('admin.students') }}" style="color:#f59e0b;font-weight:600;"> Fix now →</a>
+      </div>
+      {% else %}
+      <div style="padding:12px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;font-size:13px;color:#6ee7b7;">
+        ✅ All students have face profiles registered.
+      </div>
+      {% endif %}
+
+      {% if today_percentage < 50 and total_students > 0 %}
+      <div style="margin-top:10px;padding:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;font-size:13px;color:#fca5a5;">
+        🚨 Low attendance today: <strong>{{ today_percentage }}%</strong>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Data for charts -->
+<script id="chart-data" type="application/json">
+{
+  "weekly_labels": {{ weekly_labels | tojson }},
+  "weekly_data": {{ weekly_data | tojson }},
+  "today_present": {{ today_present }},
+  "total_absent": {{ total_students - today_present }},
+  "monthly_labels": {{ monthly_labels | tojson }},
+  "monthly_data": {{ monthly_data | tojson }}
+}
+</script>
+<script>
+const chartData = JSON.parse(document.getElementById('chart-data').textContent);
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+};
+
+const gridColor = 'rgba(255,255,255,0.06)';
+const tickColor = '#64748b';
+
+// Weekly Bar Chart
+new Chart(document.getElementById('weeklyChart'), {
+  type: 'bar',
+  data: {
+    labels: chartData.weekly_labels,
+    datasets: [{
+      data: chartData.weekly_data,
+      backgroundColor: (ctx) => {
+        const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 220);
+        g.addColorStop(0, 'rgba(124,58,237,0.9)');
+        g.addColorStop(1, 'rgba(6,182,212,0.4)');
+        return g;
+      },
+      borderRadius: 8,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    ...chartDefaults,
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 12 } } },
+      y: {
+        grid: { color: gridColor },
+        ticks: { color: tickColor, font: { size: 12 }, stepSize: 1 },
+        beginAtZero: true
+      }
+    }
+  }
+});
+
+// Donut Chart
+new Chart(document.getElementById('donutChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Present', 'Absent'],
+    datasets: [{
+      data: [chartData.today_present, chartData.total_absent],
+      backgroundColor: ['rgba(16,185,129,0.8)', 'rgba(239,68,68,0.6)'],
+      borderColor: ['#10b981', '#ef4444'],
+      borderWidth: 2,
+      hoverOffset: 8,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'bottom',
+        labels: { color: '#94a3b8', font: { size: 12 }, padding: 16 }
+      }
+    },
+    cutout: '70%',
+  }
+});
+
+// Monthly Line Chart
+new Chart(document.getElementById('monthlyChart'), {
+  type: 'line',
+  data: {
+    labels: chartData.monthly_labels,
+    datasets: [{
+      data: chartData.monthly_data,
+      borderColor: '#7c3aed',
+      backgroundColor: (ctx) => {
+        const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 200);
+        g.addColorStop(0, 'rgba(124,58,237,0.3)');
+        g.addColorStop(1, 'rgba(124,58,237,0)');
+        return g;
+      },
+      borderWidth: 2.5,
+      pointBackgroundColor: '#a78bfa',
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      fill: true,
+      tension: 0.4,
+    }]
+  },
+  options: {
+    ...chartDefaults,
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          color: tickColor, font: { size: 10 },
+          maxTicksLimit: 10,
+        }
+      },
+      y: {
+        grid: { color: gridColor },
+        ticks: { color: tickColor, font: { size: 12 }, stepSize: 1 },
+        beginAtZero: true
+      }
+    }
+  }
+});
+</script>
+{% endblock %}

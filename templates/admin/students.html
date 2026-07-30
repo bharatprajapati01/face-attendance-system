@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Students — FaceAttend Admin{% endblock %}
+{% block page_title %}Student Management{% endblock %}
+{% block page_subtitle %}Add, view, and manage student records{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary" onclick="openModal('addStudentModal')">
+  ➕ Add Student
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Search & Filter Bar -->
+<div class="card mb-24">
+  <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+    <div class="search-bar flex-1" style="min-width:200px;">
+      <span class="search-icon">🔍</span>
+      <input type="text" name="search" value="{{ search }}" placeholder="Search name, roll, email..."
+             class="form-control" style="padding-left:42px;">
+    </div>
+    <div>
+      <select name="class" class="form-control">
+        <option value="">All Classes</option>
+        {% for c in classes %}
+        <option value="{{ c }}" {% if class_filter == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Filter</button>
+    <a href="{{ url_for('admin.students') }}" class="btn btn-secondary">Reset</a>
+  </form>
+</div>
+
+<!-- Stats Row -->
+<div class="stats-grid mb-24" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));">
+  <div class="stat-card stat-purple" style="padding:18px;">
+    <div class="stat-value" style="font-size:28px;" data-counter="{{ students|length }}">0</div>
+    <div class="stat-label">
+      {% if search or class_filter %}Filtered Results{% else %}Total Students{% endif %}
+    </div>
+  </div>
+  <div class="stat-card stat-green" style="padding:18px;">
+    <div class="stat-value" style="font-size:28px;" data-counter="{{ students|selectattr('face_encoding')|list|length }}">0</div>
+    <div class="stat-label">With Face Data</div>
+  </div>
+  <div class="stat-card stat-amber" style="padding:18px;">
+    <div class="stat-value" style="font-size:28px;" data-counter="{{ students|rejectattr('face_encoding')|list|length }}">0</div>
+    <div class="stat-label">No Face Photo</div>
+  </div>
+</div>
+
+<!-- Students Table -->
+<div class="card">
+  <div class="card-header mb-20">
+    <div class="card-title">👥 All Students</div>
+    <span class="badge badge-purple">{{ students|length }} records</span>
+  </div>
+
+  {% if students %}
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Student</th>
+          <th>Roll Number</th>
+          <th>Class</th>
+          <th>Email</th>
+          <th>Face</th>
+          <th>Attendance %</th>
+          <th>Added</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for student in students %}
+        <tr>
+          <td class="text-muted">{{ loop.index }}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px;">
+              {% if student.photo_path %}
+              <img src="{{ url_for('static', filename='') }}{{ student.photo_path | replace('\\', '/') }}"
+                   class="student-avatar"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+              {% endif %}
+              <div class="student-avatar-placeholder" {% if student.photo_path %}style="display:none"{% endif %}>
+                {{ student.name[0].upper() }}
+              </div>
+              <div>
+                <div style="font-weight:600;color:var(--text-primary);">{{ student.name }}</div>
+                <div style="font-size:11px;color:var(--text-muted);">{{ student.phone or '—' }}</div>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge badge-cyan">{{ student.roll_number }}</span></td>
+          <td><span class="badge badge-purple">{{ student.class_name }}</span></td>
+          <td class="text-muted">{{ student.email }}</td>
+          <td>
+            {% if student.face_encoding %}
+            <span class="badge badge-success">✅ Registered</span>
+            {% else %}
+            <span class="badge badge-danger">❌ Missing</span>
+            {% endif %}
+          </td>
+          <td>
+            {% set pct = student.get_attendance_percentage() %}
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="progress-bar" style="flex:1;height:6px;">
+                <div class="progress-fill {% if pct >= 75 %}bg-success{% elif pct >= 50 %}bg-accent{% else %}bg-danger{% endif %}" data-width="{{ pct }}"></div>
+              </div>
+              <span class="{% if pct >= 75 %}text-success{% elif pct >= 50 %}text-accent{% else %}text-danger{% endif %}" style="font-size:12px;font-weight:600;">{{ pct }}%</span>
+            </div>
+          </td>
+          <td class="text-muted text-xs">{{ student.created_at.strftime('%b %d, %Y') }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('admin.delete_student', student_id=student.id) }}"
+                  style="display:inline;" id="delForm{{ student.id }}">
+              <button type="button" class="btn btn-danger btn-sm"
+                      onclick="confirmDelete(document.getElementById('delForm{{ student.id }}'), '{{ student.name }}')">
+                🗑️
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:60px;color:var(--text-muted);">
+    <div style="font-size:64px;margin-bottom:16px;">👥</div>
+    <h3 style="margin-bottom:8px;">No students found</h3>
+    <p>{% if search %}Try a different search term{% else %}Add your first student to get started{% endif %}</p>
+    <button class="btn btn-primary mt-20" onclick="openModal('addStudentModal')">➕ Add First Student</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ===== ADD STUDENT MODAL ===== -->
+<div class="modal-overlay" id="addStudentModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">➕ Add New Student</div>
+      <button class="modal-close" onclick="closeModal('addStudentModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <form method="POST" action="{{ url_for('admin.add_student') }}" id="addStudentForm">
+        <input type="hidden" name="face_image" id="faceImageInput">
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Full Name *</label>
+            <input type="text" name="name" class="form-control" placeholder="e.g. John Smith" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Roll Number *</label>
+            <input type="text" name="roll_number" class="form-control" placeholder="e.g. CS2024001" required>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Email *</label>
+            <input type="email" name="email" class="form-control" placeholder="student@school.edu" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Class *</label>
+            <input type="text" name="class_name" class="form-control" placeholder="e.g. CSE-A, 10-B" required>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input type="tel" name="phone" class="form-control" placeholder="Optional">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Login Username *</label>
+            <input type="text" name="username" class="form-control" placeholder="Student's login username" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Login Password *</label>
+          <input type="password" name="password" class="form-control" placeholder="Set a password for the student" required>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Face Photo Section -->
+        <div class="form-group">
+          <label class="form-label">📸 Face Photo (Required for face recognition)</label>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);border-radius:14px;padding:20px;text-align:center;">
+            <!-- Camera Preview -->
+            <div style="position:relative;margin-bottom:16px;">
+              <video id="adminVideo" style="width:100%;max-width:320px;border-radius:12px;background:#000;display:block;margin:0 auto;" autoplay muted playsinline></video>
+              <canvas id="adminCanvas" style="display:none;"></canvas>
+            </div>
+
+            <!-- Preview -->
+            <img id="photoPreview" style="display:none;width:100px;height:100px;border-radius:50%;object-fit:cover;border:3px solid var(--primary);margin:0 auto 12px;display:block;" alt="Face preview">
+
+            <p id="cameraStatus" style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+              Click "Start Camera" to capture face photo
+            </p>
+
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+              <button type="button" class="btn btn-secondary btn-sm" id="startCamBtn" onclick="startAdminCamera()">
+                📷 Start Camera
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" id="captureBtn" onclick="captureAdminPhoto()" style="display:none;">
+                📸 Capture Photo
+              </button>
+
+              <!-- File upload alternative -->
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                📁 Upload Photo
+                <input type="file" accept="image/*" onchange="handleFileUpload(this)" style="display:none;">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="padding:0;margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('addStudentModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">✅ Add Student</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+{% endblock %}

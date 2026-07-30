@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — FaceAttend</title>
+  <meta name="description" content="Secure login for Face Attendance System — Students and Teachers">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+  <div class="auth-bg">
+    <div class="auth-grid"></div>
+    <div class="auth-orb3"></div>
+  </div>
+
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="logo-icon-auth">🎓</div>
+        <div class="logo-text-auth">
+          <h1>FaceAttend</h1>
+          <p>Smart Attendance System</p>
+        </div>
+      </div>
+
+      <div class="auth-title">
+        <h2>Welcome Back</h2>
+        <p>Sign in to access your dashboard</p>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash-messages">
+        {% for category, message in messages %}
+        <div class="flash-msg flash-{{ category }}">
+          {% if category == 'success' %}✅{% elif category == 'error' %}❌{% else %}ℹ️{% endif %}
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endwith %}
+
+      <!-- Role Tabs -->
+      <div class="role-tabs" id="roleTabs">
+        <button class="role-tab active" id="tabStudent" onclick="setRole('student')">
+          🎓 Student
+        </button>
+        <button class="role-tab" id="tabAdmin" onclick="setRole('admin')">
+          👨‍🏫 Teacher
+        </button>
+      </div>
+
+      <form method="POST" action="{{ url_for('auth.login') }}" id="loginForm">
+        <input type="hidden" name="role" id="roleInput" value="student">
+
+        <div class="form-group-auth">
+          <label class="form-label-auth">Username</label>
+          <div class="input-wrapper">
+            <span class="input-icon"><i class="fa fa-user"></i></span>
+            <input type="text" name="username" id="username"
+                   class="form-input-auth"
+                   placeholder="Enter your username"
+                   required autocomplete="username">
+          </div>
+        </div>
+
+        <div class="form-group-auth">
+          <label class="form-label-auth">Password</label>
+          <div class="input-wrapper">
+            <span class="input-icon"><i class="fa fa-lock"></i></span>
+            <input type="password" name="password" id="password"
+                   class="form-input-auth"
+                   placeholder="Enter your password"
+                   required autocomplete="current-password">
+            <button type="button" class="toggle-password" onclick="togglePwd()">
+              <i class="fa fa-eye" id="pwdIcon"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-login" id="loginBtn">
+          <i class="fa fa-sign-in-alt"></i>
+          <span>Sign In</span>
+        </button>
+      </form>
+
+      <div class="demo-creds">
+        <p>🔑 <strong>Admin:</strong> username: <strong>admin</strong> · password: <strong>admin123</strong></p>
+        <p style="margin-top:4px;">👤 <strong>Student:</strong> credentials set by admin when adding student</p>
+      </div>
+
+      <div class="auth-footer">
+        <p>© 2024 FaceAttend · Secure Biometric Attendance</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentRole = 'student';
+
+    function setRole(role) {
+      currentRole = role;
+      document.getElementById('roleInput').value = role;
+      document.getElementById('tabStudent').classList.toggle('active', role === 'student');
+      document.getElementById('tabAdmin').classList.toggle('active', role === 'admin');
+    }
+
+    function togglePwd() {
+      const pwd = document.getElementById('password');
+      const icon = document.getElementById('pwdIcon');
+      if (pwd.type === 'password') {
+        pwd.type = 'text';
+        icon.className = 'fa fa-eye-slash';
+      } else {
+        pwd.type = 'password';
+        icon.className = 'fa fa-eye';
+      }
+    }
+
+    // Add loading state to button
+    document.getElementById('loginForm').addEventListener('submit', () => {
+      const btn = document.getElementById('loginBtn');
+      btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Signing in...';
+      btn.disabled = true;
+    });
+  </script>
+</body>
+</html>

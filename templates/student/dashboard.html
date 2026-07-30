@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — FaceAttend{% endblock %}
+{% block page_title %}My Dashboard{% endblock %}
+{% block page_subtitle %}{{ today.strftime('%A, %B %d, %Y') }} · Hello, {{ student.name }} 👋{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  .status-card-complete {
+    background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05));
+    border-color: rgba(245,158,11,0.4);
+  }
+  .status-card-active {
+    background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.05));
+    border-color: rgba(16,185,129,0.4);
+  }
+  .status-card-missing {
+    background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.03));
+    border-color: rgba(239,68,68,0.3);
+  }
+  .text-success { color: var(--success); }
+  .text-danger { color: var(--danger); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Today Status Banner -->
+<div class="card mb-24 animate-fade {% if today_record %}{% if today_record.exit_time %}status-card-complete{% else %}status-card-active{% endif %}{% else %}status-card-missing{% endif %}">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <div style="font-size:48px;">
+        {% if today_record %}{% if today_record.exit_time %}🏁{% else %}🟢{% endif %}{% else %}⏰{% endif %}
+      </div>
+      <div>
+        <div style="font-size:18px;font-weight:700;">
+          {% if today_record %}
+            {% if today_record.exit_time %}Attendance Complete for Today{% else %}You are Checked In{% endif %}
+          {% else %}
+            Attendance Not Yet Marked
+          {% endif %}
+        </div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">
+          {% if today_record %}
+            Entry: <strong>{{ today_record.entry_time.strftime('%I:%M %p') }}</strong>
+            {% if today_record.exit_time %}
+            · Exit: <strong>{{ today_record.exit_time.strftime('%I:%M %p') }}</strong>
+            · Duration: <strong>{{ today_record.duration_minutes() }} min</strong>
+            {% else %}
+            · Still checked in
+            {% endif %}
+          {% else %}
+            Click "Mark Attendance" to check in via face recognition
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <a href="{{ url_for('student.mark_attendance') }}" class="btn btn-{% if today_record and today_record.exit_time %}secondary{% else %}primary{% endif %} btn-lg">
+      {% if today_record and today_record.exit_time %}
+        ✅ View Record
+      {% elif today_record %}
+        📸 Mark Exit
+      {% else %}
+        📸 Mark Entry
+      {% endif %}
+    </a>
+  </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="stats-grid mb-24">
+  <div class="stat-card stat-purple animate-fade delay-1">
+    <div class="glow-bg"></div>
+    <div class="icon-wrapper">📊</div>
+    <div class="stat-value" data-counter="{{ attendance_pct }}" data-suffix="%">0%</div>
+    <div class="stat-label">30-Day Attendance</div>
+    <div class="stat-change text-purple">Last 30 days</div>
+  </div>
+
+  <div class="stat-card stat-green animate-fade delay-2">
+    <div class="glow-bg"></div>
+    <div class="icon-wrapper">✅</div>
+    <div class="stat-value" data-counter="{{ present_30 }}">0</div>
+    <div class="stat-label">Days Present</div>
+    <div class="stat-change text-success">This month</div>
+  </div>
+
+  <div class="stat-card stat-amber animate-fade delay-3">
+    <div class="glow-bg"></div>
+    <div class="icon-wrapper">🔥</div>
+    <div class="stat-value" data-counter="{{ streak }}">0</div>
+    <div class="stat-label">Day Streak</div>
+    <div class="stat-change text-amber">Consecutive days</div>
+  </div>
+
+  <div class="stat-card stat-cyan animate-fade delay-4">
+    <div class="glow-bg"></div>
+    <div class="icon-wrapper">🎓</div>
+    <div class="stat-value" style="font-size:22px;">{{ student.class_name }}</div>
+    <div class="stat-label">My Class</div>
+    <div class="stat-change text-cyan">{{ student.roll_number }}</div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div class="grid-2 mb-24">
+  <!-- Weekly attendance chart -->
+  <div class="card animate-fade delay-2">
+    <div class="card-header">
+      <div>
+        <div class="card-title">📅 Weekly Overview</div>
+        <div class="card-subtitle">Last 7 days</div>
+      </div>
+    </div>
+    <div class="chart-container" style="height:180px;">
+      <canvas id="weeklyChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Attendance ring -->
+  <div class="card animate-fade delay-3">
+    <div class="card-header">
+      <div>
+        <div class="card-title">🎯 Attendance Goal</div>
+        <div class="card-subtitle">75% minimum required</div>
+      </div>
+    </div>
+    <div style="height:180px;display:flex;align-items:center;justify-content:center;position:relative;">
+      <canvas id="ringChart" style="max-width:160px;max-height:160px;"></canvas>
+      <div style="position:absolute;text-align:center;">
+        <div class="{% if attendance_pct >= 75 %}text-success{% else %}text-danger{% endif %}" style="font-size:24px;font-weight:800;">{{ attendance_pct }}%</div>
+        <div style="font-size:11px;color:var(--text-muted);">attendance</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Row -->
+<div class="grid-2-1">
+  <!-- Recent records -->
+  <div class="card animate-fade delay-3">
+    <div class="card-header mb-20">
+      <div class="card-title">📋 Recent Attendance</div>
+      <a href="{{ url_for('student.history') }}" class="btn btn-secondary btn-sm">View All</a>
+    </div>
+    {% if recent %}
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Entry</th>
+            <th>Exit</th>
+            <th>Duration</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rec in recent %}
+          <tr>
+            <td style="font-weight:600;">{{ rec.date.strftime('%b %d, %Y') }}</td>
+            <td style="color:var(--success);">
+              {% if rec.entry_time %}{{ rec.entry_time.strftime('%I:%M %p') }}{% else %}—{% endif %}
+            </td>
+            <td style="color:var(--accent);">
+              {% if rec.exit_time %}{{ rec.exit_time.strftime('%I:%M %p') }}{% else %}—{% endif %}
+            </td>
+            <td>
+              {% set dur = rec.duration_minutes() %}
+              {% if dur %}<span style="color:var(--secondary);">{{ dur }} min</span>{% else %}—{% endif %}
+            </td>
+            <td><span class="badge badge-{% if rec.status == 'present' %}success{% else %}danger{% endif %}">{{ rec.status.title() }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:40px;color:var(--text-muted);">
+      <div style="font-size:48px;">📭</div>
+      <p>No attendance records yet.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Calendar Heatmap -->
+  <div class="card animate-fade delay-4">
+    <div class="card-title mb-16">📆 This Month</div>
+    <div id="calendarGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">
+      {% set days_in_month = today.replace(day=1) %}
+      {% for day in range(1, 32) %}
+        {% if day <= today.day %}
+        <div style="
+          aspect-ratio:1;
+          border-radius:6px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:10px;
+          font-weight:600;
+          background:{% if day in present_dates %}rgba(16,185,129,0.3){% else %}rgba(255,255,255,0.04){% endif %};
+          border:1px solid {% if day in present_dates %}rgba(16,185,129,0.5){% else %}rgba(255,255,255,0.06){% endif %};
+          color:{% if day == today.day %}var(--primary-light){% elif day in present_dates %}var(--success){% else %}var(--text-muted){% endif %};
+          {% if day == today.day %}ring:2px solid var(--primary);{% endif %}
+        " title="{{ 'Present' if day in present_dates else 'Absent/Future' }}">
+          {{ day }}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <div style="display:flex;gap:12px;margin-top:16px;font-size:12px;color:var(--text-muted);">
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:rgba(16,185,129,0.3);display:inline-block;"></span>Present</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:rgba(255,255,255,0.04);display:inline-block;"></span>Absent</span>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Data for charts -->
+<script id="chart-data" type="application/json">
+{
+  "weekly_labels": {{ weekly_labels | tojson }},
+  "weekly_data": {{ weekly_data | tojson }},
+  "attendance_pct": {{ attendance_pct }}
+}
+</script>
+<script>
+const gridColor = 'rgba(255,255,255,0.06)';
+const tickColor = '#64748b';
+const chartData = JSON.parse(document.getElementById('chart-data').textContent);
+
+// Weekly chart
+new Chart(document.getElementById('weeklyChart'), {
+  type: 'bar',
+  data: {
+    labels: chartData.weekly_labels,
+    datasets: [{
+      data: chartData.weekly_data,
+      backgroundColor: (ctx) => ctx.raw === 1 ? 'rgba(16,185,129,0.8)' : 'rgba(239,68,68,0.4)',
+      borderRadius: 6,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: tickColor } },
+      y: { grid: { color: gridColor }, ticks: { color: tickColor, stepSize: 1, max: 1 }, beginAtZero: true }
+    }
+  }
+});
+
+// Ring chart
+new Chart(document.getElementById('ringChart'), {
+  type: 'doughnut',
+  data: {
+    datasets: [{
+      data: [chartData.attendance_pct, 100 - chartData.attendance_pct],
+      backgroundColor: [chartData.attendance_pct >= 75 ? "rgba(16,185,129,0.8)" : "rgba(239,68,68,0.8)", 'rgba(255,255,255,0.05)'],
+      borderColor: [chartData.attendance_pct >= 75 ? "#10b981" : "#ef4444", 'transparent'],
+      borderWidth: 2,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '80%',
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+  }
+});
+</script>
+{% endblock %}
