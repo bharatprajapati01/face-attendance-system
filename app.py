@@ -45,14 +45,21 @@ def create_app():
 def _seed_admin():
     """Create default admin if none exists."""
     if not User.query.filter_by(role='admin').first():
+        
+        admin_password = os.environ.get("ADMIN_PASSWORD")
+
+        if not admin_password:
+            raise RuntimeError("ADMIN_PASSWORD environment variable is required")
+
         admin = User(
-            username='admin',
-            password_hash=generate_password_hash('admin123'),
-            role='admin'
+        username='admin',
+        password_hash=generate_password_hash(admin_password),
+        role='admin'
         )
         db.session.add(admin)
         db.session.commit()
-        print("Default admin created: username=admin, password=admin123")
+
+        print("Default admin created: username=admin")
 
 
 if __name__ == '__main__':
